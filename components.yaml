@@ -1,0 +1,127 @@
+kind: Environment
+name: envname
+type: primary
+urlHandle: xxxxxx
+
+environmentVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+
+templateVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+components:
+
+    # -------------------- JOBS ----------------------------
+    # Job (ex: migration, seed, etc)
+    -
+        kind: KubernetesManifest
+        name: pi-job-k8s
+        runnerImage: 'alpine/k8s:1.22.15'
+        deploy:
+            - |
+                cat <<EOF > migration.job.yaml
+                apiVersion: batch/v1
+                kind: Job
+                metadata:
+                  name: migration-1
+                spec:
+                  template:
+                    spec:
+                      containers:
+                      - name: custom-job
+                        image: alpine:latest
+                        # image: {{ components.laravel-image.image }}
+                        command: ['/bin/sh -c "sleep 3700"']
+                      restartPolicy: OnFailure
+                  backoffLimit: 4
+                EOF
+            - 'kustomize create --autodetect --recursive --labels=app.kubernetes.io/instance-{{ component.name }}:bns,app.kubernetes.io/part-of:env-{{ env.unique }} --namespace {{ env.k8s.namespace }}'
+            - 'kubectl apply -k .'
+        destroy:
+            - 'kustomize create --autodetect --recursive --namespace {{ env.k8s.namespace }}'
+            - 'kubectl delete -k .'
+    
+    
+    # Job that waits for another job to finish succesfully
+    -
+        kind: KubernetesManifest
+        name: check-job
+        runnerImage: 'alpine/k8s:1.22.15'
+        deploy:
+            - 'kubectl wait --for=condition=complete job/migration-1 --timeout=120s'
+            - '# sleep 3600'
+        dependsOn:
+            - seed-job
+
+
+    # -------------------- IMAGE BUILD ----------------------------
+    -
+        kind: DockerImage
+        name: laravel-image
+        gitRepo: 'https://github.com/alexo-bunnyshell/bunnyshell-laravel10.git'
+        gitBranch: main
+        gitApplicationPath: /
+        context: /
+        dockerfile: .docker/php/Dockerfile
+        target: dev
+        args:
+            ENV: bunnyshell
+
+
+
+    # -------------------- TF - OPENTOFU ----------------------------          
+
+
+    -
+        kind: Terraform
+        name: s3-bucket
+        gitRepo: 'https://github.com/bunnyshell/templates.git'
+        gitBranch: main
+        gitApplicationPath: components/tf-aws-s3
+        runnerImage: 'ghcr.io/opentofu/opentofu:1.7.0-rc1'
+        deploy:
+            - 'cd components/tf-aws-s3'
+            - 'ls -alh'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'tofu init -input=false -no-color'
+            - 'tofu apply -var "bucket_name=ao-test-{{ env.name }}" -input=false -auto-approve -no-color'
+            - 'BNS_TF_STATE_LIST=`tofu show -json`'
+            - 'BUCKET_NAME=`tofu output --raw s3_bucket_name`'
+            - 'BUCKET_REGION=`tofu output --raw s3_bucket_region`'
+        destroy:
+            - 'cd components/tf-aws-s3'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'tofu init -input=false -no-color'
+            - 'tofu destroy -var "bucket_name=ao-test-{{ env.name }}" -input=false -auto-approve -no-color'
+        exportVariables:
+            - BUCKET_NAME
+            - BUCKET_REGION
+        environment:
+            AWS_ACCESS_KEY_ID: '{{ template.vars.AWS_ACCESS_KEY_ID }}'
+            AWS_REGION: '{{ template.vars.AWS_REGION }}'
+            AWS_SECRET_ACCESS_KEY: '{{ template.vars.AWS_SECRET_ACCESS_KEY }}'
+    -
+        kind: Terraform
+        name: password
+        gitRepo: 'https://github.com/bunnyshell/templates.git'
+        gitBranch: tf-password-generator/v0.1.0
+        gitApplicationPath: components/tf-password-generator
+        runnerImage: 'hashicorp/terraform:1.5'
+        deploy:
+            - 'cd components/tf-password-generator'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'terraform init -input=false -no-color'
+            - 'terraform apply -var "length=20" -var "min_special=5" -input=false -auto-approve -no-color'
+            - 'BNS_TF_STATE_LIST=`terraform show -json`'
+            - 'PASSWORD=`terraform output -raw password`'
+        destroy:
+            - 'cd components/tf-password-generator'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'terraform init -input=false -no-color'
+            - 'terraform destroy -var "length=20" -var "min_special=5" -input=false -auto-approve -no-color'
+        exportVariables:
+            - PASSWORD
+
+
+            

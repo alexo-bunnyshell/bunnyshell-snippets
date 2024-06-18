@@ -1,0 +1,106 @@
+kind: Environment
+name: envname
+type: primary
+urlHandle: xxxxxx
+
+environmentVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+  APP_NAME_BNS: sinatra
+  APP_PORT_BNS: '4567'
+  DB_NAME: my_db
+  DB_PASS: 'add-pass-here'
+  DB_ROOTPASS: 'add-pass-here'
+  DB_USER: db-user
+
+
+  # -------------------- Init containers ----------------------------
+
+components:
+    -
+        kind: Database
+        name: mysql
+        dockerCompose:
+            image: 'mysql:8.0'
+            environment:
+                MYSQL_DATABASE: '{{env.vars.DB_NAME}}'
+                MYSQL_PASSWORD: '{{env.vars.DB_PASS}}'
+                MYSQL_ROOT_PASSWORD: '{{env.vars.DB_ROOTPASS}}'
+                MYSQL_USER: '{{env.vars.DB_USER}}'
+            ports:
+                - '3306:3306'
+        volumes:
+            -
+                name: mysql-volume
+                mount: /var/lib/mysql
+                subPath: ''
+    -
+        kind: InitContainer
+        name: db-init
+        gitRepo: '-- add your git repo url here --'
+        gitBranch: main
+        gitApplicationPath: /
+        dockerCompose:
+            build:
+                context: .
+            environment:
+                DATABASE_URL: 'mysql2://{{env.vars.DB_USER}}:{{env.vars.DB_PASS}}@mysql:3306/{{env.vars.DB_NAME}}?reconnect=true&ssl_mode=REQUIRED'
+                RACK_ENV: development
+            command:
+                - /bin/sh
+                - '-c'
+                - |
+                    cd /code
+                    # Attempt to check migration status to infer if DB exists
+                    if bundle exec rake db:migrate:status &> /dev/null; then
+                        echo 'Running database migrations...'
+                        bundle exec rake db:migrate
+                    else
+                        echo 'Creating and seeding application database...'
+                        bundle exec rake db:create
+                        bundle exec rake db:migrate
+                        bundle exec rake db:seed
+                    fi
+        dependsOn:
+            - mysql
+    -
+        kind: Application
+        name: sinatra
+        gitRepo: '-- add your git repo url here --'
+        gitBranch: main
+        gitApplicationPath: /
+        dockerCompose:
+            build:
+                context: .
+            environment:
+                DATABASE_URL: 'mysql2://{{env.vars.DB_USER}}:{{env.vars.DB_PASS}}@mysql:3306/{{env.vars.DB_NAME}}?reconnect=true&ssl_mode=REQUIRED'
+                RACK_ENV: development
+            ports:
+                - 4567
+        pod:
+            init_containers:
+                -
+                    from: db-init
+                    name: init-db-migrate-seed
+                    environment:
+                        DATABASE_URL: 'mysql2://{{env.vars.DB_USER}}:{{env.vars.DB_PASS}}@mysql:3306/{{env.vars.DB_NAME}}?reconnect=true&ssl_mode=REQUIRED'
+                        RACK_ENV: development
+                    shared_paths:
+                        -
+                            path: /code
+                            target:
+                                path: /code
+                                container: '@parent'
+                            initial_contents: '@target'
+        hosts:
+            -
+                hostname: 'sinatra-app-{{ env.base_domain }}'
+                path: /
+                servicePort: 4567
+        dependsOn:
+            - mysql
+
+volumes:
+    -
+        name: mysql-volume
+        size: 5Gi
+        type: disk

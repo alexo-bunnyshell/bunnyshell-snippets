@@ -1,0 +1,29 @@
+kind: Environment
+name: envname
+type: primary
+urlHandle: xxxxxx
+
+environmentVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+
+templateVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+  AWS_ACCESS_KEY_ID: 'ENCRYPTED[2TnwFS3t4HcvrDz/n0RMQeyqaipe9z899FiTIgA3+yF9cpUJESiuQsU2XiCo5ww/4pWRNm5jNm1j]'
+  AWS_REGION: eu-west-1
+  AWS_SECRET_ACCESS_KEY: 'ENCRYPTED[b66LQv+MF78r5Eseem28yZ+EkOc3AjGwwNALmY2yq7ft8wmGcPPoUfeyh00Be1+PsN5I+z58YMJdd0SbgN0OtMawRTDilZE2bmM2bWM=]'
+
+components:
+
+
+# -------------------- IP ACCESS ----------------------------          
+security:
+    access:
+        allowedIps:
+            - 0.0.0.0/32
+        realIpTrustedProxies: null
+volumes:
+    -
+        name: database-data
+        size: 1Gi
+        type: network

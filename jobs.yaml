@@ -1,0 +1,60 @@
+kind: Environment
+name: envname
+type: primary
+urlHandle: xxxxxx
+
+environmentVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+
+templateVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+components:
+
+    # -------------------- JOBS ----------------------------
+    # Job (ex: migration, seed, etc)
+    -
+        kind: KubernetesManifest
+        name: pi-job-k8s
+        runnerImage: 'alpine/k8s:1.22.15'
+        deploy:
+            - |
+                cat <<EOF > migration.job.yaml
+                apiVersion: batch/v1
+                kind: Job
+                metadata:
+                  name: migration-1
+                spec:
+                  template:
+                    spec:
+                      containers:
+                      - name: custom-job
+                        image: alpine:latest
+                        # image: {{ components.laravel-image.image }}
+                        command: ['/bin/sh -c "sleep 3700"']
+                        envFrom:
+                            - configMapRef:
+                                # replace with the name of the `application` ConfigMap
+                                name: application-vars    
+                      restartPolicy: OnFailure
+                  backoffLimit: 4
+                EOF
+            - 'kustomize create --autodetect --recursive --labels=app.kubernetes.io/instance-{{ component.name }}:bns,app.kubernetes.io/part-of:env-{{ env.unique }} --namespace {{ env.k8s.namespace }}'
+            - 'kubectl apply -k .'
+        destroy:
+            - 'kustomize create --autodetect --recursive --namespace {{ env.k8s.namespace }}'
+            - 'kubectl delete -k .'
+    
+    
+    # Job that waits for another job to finish succesfully
+    -
+        kind: KubernetesManifest
+        name: check-job
+        runnerImage: 'alpine/k8s:1.22.15'
+        deploy:
+            - 'kubectl wait --for=condition=complete job/migration-1 --timeout=120s'
+            - '# sleep 3600'
+        dependsOn:
+            - seed-job
+

@@ -1,0 +1,54 @@
+# create a variable AUTHFILE_BASE64 that contains the base64 encoded content of the file that you want to use for basic auth
+
+## generate the auth file
+# echo PASSWORD | htpasswd -c -i auth USERNAME
+# auth = name of the file to be created
+
+## encode the file and set the value of AUTHFILE_BASE64 to the output
+# cat auth | base64
+
+
+  components:
+    -
+        kind: KubernetesManifest
+        name: basic-auth-credentials
+        runnerImage: 'alpine/k8s:1.22.15'
+        deploy:
+            - |
+                echo $AUTHFILE_BASE64 | base64 -d > auth
+                kubectl create secret generic ingres-basic-auth --from-file=auth --namespace {{ env.k8s.namespace }} --dry-run=client -o yaml | kubectl apply -f -
+        destroy:
+            - 'kustomize create --autodetect --recursive --namespace {{ env.k8s.namespace }}'
+            - 'kubectl delete secret ingres-basic-auth --namespace {{ env.k8s.namespace }} '
+        environment:
+            AUTHFILE_BASE64: 'ENCRYPTED[GWuYKsdcA2Gnvy4XWIIAuV7HPCcxX1G/IwLG+BCqgW7/3Nfoh39Vvmm1Oowpj1Uf+pKCN4+7KKMS9U53VOvgwpN2Pvl+Gtbv27rDT6q5QTg4WhIM4pWRNm5jNm1j]'
+    -
+        kind: Application
+        name: result
+        gitRepo: 'https://github.com/alexo-bunnyshell/example-voting-app.git'
+        gitBranch: main
+        gitApplicationPath: result
+        dockerCompose:
+            build:
+                context: ./result
+                dockerfile: Dockerfile
+                args:
+                    SECRET_ARG: '{{env.vars.SECRET}}'
+            entrypoint:
+                - nodemon
+                - server.js
+            ports:
+                - '80:80'
+                - '5858:5858'
+        hosts:
+            -
+                hostname: 'result-{{ env.base_domain }}'
+                path: /
+                servicePort: 80
+                k8s:
+                    ingress:
+                        annotations:
+                            nginx.ingress.kubernetes.io/proxy-body-size: 50m
+                            nginx.ingress.kubernetes.io/auth-type: basic
+                            nginx.ingress.kubernetes.io/auth-secret: '{{ env.k8s.namespace }}/ingres-basic-auth'
+                            nginx.ingress.kubernetes.io/auth-realm: 'Authentication Required'

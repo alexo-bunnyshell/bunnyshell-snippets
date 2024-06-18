@@ -1,0 +1,29 @@
+kind: Environment
+name: envname
+type: primary
+urlHandle: xxxxxx
+
+environmentVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+
+templateVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+components:
+
+
+    # -------------------- IMAGE BUILD ----------------------------
+    -
+        kind: DockerImage
+        name: laravel-image
+        gitRepo: 'https://github.com/alexo-bunnyshell/bunnyshell-laravel10.git'
+        gitBranch: main
+        gitApplicationPath: /
+        context: /
+        dockerfile: .docker/php/Dockerfile
+        target: dev
+        args:
+            ENV: bunnyshell
+
+

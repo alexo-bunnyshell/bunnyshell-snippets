@@ -1,0 +1,73 @@
+kind: Environment
+name: envname
+type: primary
+urlHandle: xxxxxx
+
+environmentVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+
+templateVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+  AWS_ACCESS_KEY_ID: 'ENCRYPTED[2TnwFS3t4HcvrDz/n0RMQeyqaipe9z899FiTIgA3+yF9cpUJESiuQsU2XiCo5ww/4pWRNm5jNm1j]'
+  AWS_REGION: eu-west-1
+  AWS_SECRET_ACCESS_KEY: 'ENCRYPTED[b66LQv+MF78r5Eseem28yZ+EkOc3AjGwwNALmY2yq7ft8wmGcPPoUfeyh00Be1+PsN5I+z58YMJdd0SbgN0OtMawRTDilZE2bmM2bWM=]'
+
+components:
+
+
+    # -------------------- TF - OPENTOFU ----------------------------          
+
+
+    -
+        kind: Terraform
+        name: s3-bucket
+        gitRepo: 'https://github.com/bunnyshell/templates.git'
+        gitBranch: main
+        gitApplicationPath: components/tf-aws-s3
+        runnerImage: 'ghcr.io/opentofu/opentofu:1.7.0-rc1'
+        deploy:
+            - 'cd components/tf-aws-s3'
+            - 'ls -alh'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'tofu init -input=false -no-color'
+            - 'tofu apply -var "bucket_name=ao-test-{{ env.name }}" -input=false -auto-approve -no-color'
+            - 'BNS_TF_STATE_LIST=`tofu show -json`'
+            - 'BUCKET_NAME=`tofu output --raw s3_bucket_name`'
+            - 'BUCKET_REGION=`tofu output --raw s3_bucket_region`'
+        destroy:
+            - 'cd components/tf-aws-s3'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'tofu init -input=false -no-color'
+            - 'tofu destroy -var "bucket_name=ao-test-{{ env.name }}" -input=false -auto-approve -no-color'
+        exportVariables:
+            - BUCKET_NAME
+            - BUCKET_REGION
+        environment:
+            AWS_ACCESS_KEY_ID: '{{ template.vars.AWS_ACCESS_KEY_ID }}'
+            AWS_REGION: '{{ template.vars.AWS_REGION }}'
+            AWS_SECRET_ACCESS_KEY: '{{ template.vars.AWS_SECRET_ACCESS_KEY }}'
+    -
+        kind: Terraform
+        name: password
+        gitRepo: 'https://github.com/bunnyshell/templates.git'
+        gitBranch: tf-password-generator/v0.1.0
+        gitApplicationPath: components/tf-password-generator
+        runnerImage: 'hashicorp/terraform:1.5'
+        deploy:
+            - 'cd components/tf-password-generator'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'terraform init -input=false -no-color'
+            - 'terraform apply -var "length=20" -var "min_special=5" -input=false -auto-approve -no-color'
+            - 'BNS_TF_STATE_LIST=`terraform show -json`'
+            - 'PASSWORD=`terraform output -raw password`'
+        destroy:
+            - 'cd components/tf-password-generator'
+            - '/bns/helpers/terraform/get_managed_backend > zz_backend_override.tf'
+            - 'terraform init -input=false -no-color'
+            - 'terraform destroy -var "length=20" -var "min_special=5" -input=false -auto-approve -no-color'
+        exportVariables:
+            - PASSWORD
+
+
+            

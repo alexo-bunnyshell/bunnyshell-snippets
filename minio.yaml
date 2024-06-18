@@ -1,0 +1,43 @@
+kind: Environment
+name: minio2
+type: primary
+components:
+    -
+        kind: Database
+        name: minio
+        dockerCompose:
+            image: bitnami/minio
+            ports:
+                - '9000:9000'
+                - '9001:9001'
+            environment:
+                MINIO_BROWSER_REDIRECT_URL: 'https://minio-console-{{ env.base_domain }}'
+                MINIO_ROOT_PASSWORD: miniorootpasswordasdf
+                MINIO_ROOT_USER: root
+                MINIO_SERVER_URL: 'https://minio-{{ env.base_domain }}'
+            command:
+                - minio
+                - server
+                - /data/minio
+                - '--console-address'
+                - ':9001'
+        hosts:
+            -
+                hostname: 'minio-console-{{ env.base_domain }}'
+                path: /
+                servicePort: 9001
+            -
+                hostname: 'minio-{{ env.base_domain }}'
+                path: /
+                servicePort: 9000
+        volumes:
+            -
+                name: minio
+                mount: /data/minio
+                subPath: ''
+
+volumes:
+    -
+        name: minio
+        size: 5Gi
+        type: disk

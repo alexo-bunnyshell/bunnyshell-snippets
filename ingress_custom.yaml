@@ -1,0 +1,58 @@
+hosts:
+  hostname: s-{{ env.base_domain }}
+  path: /service-a
+  k8s:
+    ingress:
+      annotations:
+        nginx.ingress.kubernetes.io/rewrite-target: '/'
+
+
+
+
+
+Aris Buzachis
+  4 months ago
+hosts:
+  hostname: s-{{ env.base_domain }}
+  path: /service-a(/|$)(.*)
+  k8s:
+    ingress:
+      annotations:
+        nginx.ingress.kubernetes.io/use-regex: "true"
+        nginx.ingress.kubernetes.io/rewrite-target: '/$2'
+
+
+
+       
+
+
+# in: https://documentation.bunnyshell.com/docs/ref-envyaml-definition-components#hostsk8singress
+
+hosts:
+  - hostname: stage-1.my-company.tld
+    servicePort: 8080
+    selfManagedDns: true
+    k8s:
+      ingress:
+        className: my-own-ingress
+        annotations:
+            alb.ingress.kubernetes.io/scheme: internal
+            alb.ingress.kubernetes.io/group.name: kube-system-internal
+            nginx.ingress.kubernetes.io/proxy-body-size: "50m" 
+
+
+# Pt configurari nginx ingress in k8s se folosesc `annotations`, care practic sunt niste comentarii care ajung la setup-ul de nginx si devin echivalentul liniilor de config din vhost.
+# Bunnyshell suporta annotations pt ingress prin syntaxa: `hosts[].k8s.ingress.annotations`, ca in ex:
+# Pt req size trebuie pus `nginx.ingress.kubernetes.io/proxy-body-size: 50m` (ajustat 50m).
+
+# https://github.com/kubernetes/ingress-nginx/blob/main/docs/user-guide/nginx-configuration/annotations.md
+```
+        hosts:
+            -
+                hostname: 'vote-{{ env.base_domain }}'
+                path: /
+                servicePort: 80
+                k8s:
+                    ingress:
+                        annotations:
+                            nginx.ingress.kubernetes.io/proxy-body-size: 50m

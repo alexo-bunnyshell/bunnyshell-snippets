@@ -1,0 +1,44 @@
+kind: Environment
+name: envname
+type: primary
+urlHandle: xxxxxx
+
+environmentVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+
+
+templateVariables:
+  SAMPLE_VAR: '{{env.unique}}'
+  AWS_ACCESS_KEY_ID: 'ENCRYPTED[2TnwFS3t4HcvrDz/n0RMQeyqaipe9z899FiTIgA3+yF9cpUJESiuQsU2XiCo5ww/4pWRNm5jNm1j]'
+  AWS_REGION: eu-west-1
+  AWS_SECRET_ACCESS_KEY: 'ENCRYPTED[b66LQv+MF78r5Eseem28yZ+EkOc3AjGwwNALmY2yq7ft8wmGcPPoUfeyh00Be1+PsN5I+z58YMJdd0SbgN0OtMawRTDilZE2bmM2bWM=]'
+
+components:
+
+
+    # -------------------- Cloudflare tunnel ----------------------------          
+
+    -
+        kind: Application
+        name: web
+        gitRepo: 'https://github.com/alexo-bunnyshell/example-github-actions.git'
+        gitBranch: tmp-test
+        gitApplicationPath: /
+        dockerCompose:
+            build:
+                context: .
+                dockerfile: DockerfileTest
+                target: prod
+            ports:
+                - '8080:80'
+    -
+        kind: Service
+        name: cloudflared
+        dockerCompose:
+            image: 'cloudflare/cloudflared:latest'
+            command:
+                - tunnel
+                - '--no-autoupdate'
+                - run
+                - '--token'
+                - _____________Q4NzgiLCJ0IjoiMjViOGVlNjAtODM1ZS00Y2NlLTlhMzUtNThiNDU0M2MzZTFkIiwicyI6IlpUa3pNems_____________
